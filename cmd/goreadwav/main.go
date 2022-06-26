@@ -22,12 +22,12 @@ type RIFF struct {
 	Format string
 }
 
-type Wave struct {
-	WaveFormat
-	WaveData
+type Wav struct {
+	WavFormat
+	WavData
 }
 
-type WaveFormat struct {
+type WavFormat struct {
 	ID         string
 	Size       uint32
 	AudioFmt   uint16
@@ -40,7 +40,7 @@ type WaveFormat struct {
 	// ExParaSize uint16
 }
 
-type WaveData struct {
+type WavData struct {
 	ID   string
 	Size uint32
 	Data []byte
@@ -48,11 +48,11 @@ type WaveData struct {
 
 func main() {
 	// TODO: ハードコードあとでやめる
-	wav := "./wav/sample2.wav"
+	wavfile := "./wav/sample.wav"
 
 	fmt.Println(uint64(8 + uint32(math.MaxInt32)))
 
-	bytes, err := ioutil.ReadFile(wav)
+	bytes, err := ioutil.ReadFile(wavfile)
 	if err != nil {
 		log.Panicln(err)
 		os.Exit(1)
@@ -67,14 +67,14 @@ func main() {
 	log.Printf("riff.Size: %v, riff.Data[:10]: %v\n", riff.Size, riff.Data[:10])
 
 	//
-	wave, err := readWAVE(bytes)
+	wav, err := readWav(bytes)
 	if err != nil {
 		log.Println(err.Error())
 		os.Exit(1)
 	}
-	log.Printf("%#v\n", wave.WaveFormat)
-	log.Printf("WaveData ID: %v, Size: %v, Data: %v\n",
-		wave.WaveData.ID, wave.WaveData.Size, wave.WaveData.Data[:10])
+	log.Printf("%#v\n", wav.WavFormat)
+	log.Printf("WavData ID: %v, Size: %v, Data: %v\n",
+		wav.WavData.ID, wav.WavData.Size, wav.WavData.Data[:10])
 }
 
 func readChunk(b []byte) (*Chunk, error) {
@@ -118,28 +118,28 @@ func readRIFF(b []byte) (*RIFF, error) {
 	}, nil
 }
 
-func readWAVE(b []byte) (*Wave, error) {
+func readWav(b []byte) (*Wav, error) {
 	riff, err := readRIFF(b)
 	if err != nil {
 		return nil, err
 	}
 	// フォーマットチャンク
-	wfmt, err := readWaveFormat(riff.Data)
+	wfmt, err := readWavFormat(riff.Data)
 	if err != nil {
 		return nil, err
 	}
 	// データチャンク
-	wdata, err := readWaveData(riff.Data, 8+wfmt.Size)
+	wdata, err := readWavData(riff.Data, 8+wfmt.Size)
 	if err != nil {
 		return nil, err
 	}
-	return &Wave{
-		WaveFormat: *wfmt,
-		WaveData:   *wdata,
+	return &Wav{
+		WavFormat: *wfmt,
+		WavData:   *wdata,
 	}, nil
 }
 
-func readWaveFormat(b []byte) (*WaveFormat, error) {
+func readWavFormat(b []byte) (*WavFormat, error) {
 	chunk, err := readChunk(b)
 	if err != nil {
 		return nil, err
@@ -156,7 +156,7 @@ func readWaveFormat(b []byte) (*WaveFormat, error) {
 	bitPerSmpl := binary.LittleEndian.Uint16(chunk.Data[22:24])
 	// TODO: 拡張パラメータ
 	//exParaSize := binary.LittleEndian.Uint16(b[22:24])
-	return &WaveFormat{
+	return &WavFormat{
 		ID:         id,
 		Size:       size,
 		AudioFmt:   audioFmt,
@@ -168,12 +168,12 @@ func readWaveFormat(b []byte) (*WaveFormat, error) {
 	}, nil
 }
 
-func readWaveData(b []byte, offset uint32) (*WaveData, error) {
+func readWavData(b []byte, offset uint32) (*WavData, error) {
 	chunk, err := readChunk(b[offset:])
 	if err != nil {
 		return nil, err
 	}
-	return &WaveData{
+	return &WavData{
 		ID:   chunk.ID,
 		Size: chunk.Size,
 		Data: chunk.Data,
