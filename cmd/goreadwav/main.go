@@ -50,8 +50,6 @@ func main() {
 	// TODO: ハードコードあとでやめる
 	wavfile := "./wav/sample.wav"
 
-	fmt.Println(uint64(8 + uint32(math.MaxInt32)))
-
 	bytes, err := ioutil.ReadFile(wavfile)
 	if err != nil {
 		log.Panicln(err)
@@ -59,20 +57,12 @@ func main() {
 	}
 
 	// RIFFチャンク
-	riff, err := readRIFF(bytes)
-	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
-	}
-	log.Printf("riff.Size: %v, riff.Data[:10]: %v\n", riff.Size, riff.Data[:10])
-
-	//
 	wav, err := readWav(bytes)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err)
 		os.Exit(1)
 	}
-	log.Printf("%#v\n", wav.WavFormat)
+	log.Printf("WavFormat: %+v\n", wav.WavFormat)
 	log.Printf("WavData ID: %v, Size: %v, Data: %v\n",
 		wav.WavData.ID, wav.WavData.Size, wav.WavData.Data[:10])
 }
@@ -104,7 +94,7 @@ func readRIFF(b []byte) (*RIFF, error) {
 		return nil, err
 	}
 	if chunk.ID != "RIFF" {
-		return nil, fmt.Errorf("not RIFF, found %s", chunk.ID)
+		return nil, fmt.Errorf("not \"RIFF\", found %s", chunk.ID)
 	}
 	if len(chunk.Data) < 4 {
 		return nil, fmt.Errorf("this RIFF has no format")
@@ -114,7 +104,7 @@ func readRIFF(b []byte) (*RIFF, error) {
 		ID:     chunk.ID,
 		Size:   chunk.Size,
 		Format: format,
-		Data:   chunk.Data[4:],
+		Data:   chunk.Data,
 	}, nil
 }
 
@@ -123,13 +113,16 @@ func readWav(b []byte) (*Wav, error) {
 	if err != nil {
 		return nil, err
 	}
+	if riff.Format != "WAVE" {
+		return nil, fmt.Errorf("not \"WAVE\", found %s", riff.Format)
+	}
 	// フォーマットチャンク
-	wfmt, err := readWavFormat(riff.Data)
+	wfmt, err := readWavFormat(riff.Data[4:])
 	if err != nil {
 		return nil, err
 	}
 	// データチャンク
-	wdata, err := readWavData(riff.Data, 8+wfmt.Size)
+	wdata, err := readWavData(riff.Data, 4+8+wfmt.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -145,17 +138,24 @@ func readWavFormat(b []byte) (*WavFormat, error) {
 		return nil, err
 	}
 	// TODO: バリデーション
+
+	if chunk.ID != "fmt " {
+		return nil, fmt.Errorf("not \"fmt \", found %s", chunk.ID)
+	}
+
 	id := chunk.ID
 	size := chunk.Size
 
-	audioFmt := binary.LittleEndian.Uint16(chunk.Data[8:10])
-	chNum := binary.LittleEndian.Uint16(chunk.Data[10:12])
-	smplRate := binary.LittleEndian.Uint32(chunk.Data[12:16])
-	byteRate := binary.LittleEndian.Uint32(chunk.Data[16:20])
-	blockSize := binary.LittleEndian.Uint16(chunk.Data[20:22])
-	bitPerSmpl := binary.LittleEndian.Uint16(chunk.Data[22:24])
+	audioFmt := binary.LittleEndian.Uint16(chunk.Data[:2])
+	chNum := binary.LittleEndian.Uint16(chunk.Data[2:4])
+	smplRate := binary.LittleEndian.Uint32(chunk.Data[4:8])
+	byteRate := binary.LittleEndian.Uint32(chunk.Data[8:12])
+	blockSize := binary.LittleEndian.Uint16(chunk.Data[12:14])
+	bitPerSmpl := binary.LittleEndian.Uint16(chunk.Data[14:16])
 	// TODO: 拡張パラメータ
-	//exParaSize := binary.LittleEndian.Uint16(b[22:24])
+	//if size > 16 {
+	//exParaSize := binary.LittleEndian.Uint16(b[20:22])
+	//}
 	return &WavFormat{
 		ID:         id,
 		Size:       size,
@@ -172,6 +172,9 @@ func readWavData(b []byte, offset uint32) (*WavData, error) {
 	chunk, err := readChunk(b[offset:])
 	if err != nil {
 		return nil, err
+	}
+	if chunk.ID != "data" {
+		return nil, fmt.Errorf("not \"data\", found %s", chunk.ID)
 	}
 	return &WavData{
 		ID:   chunk.ID,
